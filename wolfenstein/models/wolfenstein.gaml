@@ -99,7 +99,7 @@ global {
 }
 
 
-// The game map
+// The game map, describe the location of walls and enemies
 grid game_map width:nb_cells_width height:nb_cells_height{
 
 	string type <- "floor" among:["floor", "wall"];
@@ -155,7 +155,7 @@ species player {
 	}
 	
 	// constants for raycasting algorithm
-	float FOV <- 150.0;
+	float FOV <- 90.0;
 	float half_FOV <- FOV/2;
 	int nb_rays <- 100;
 	float step_angle <- FOV/nb_rays;
@@ -306,7 +306,10 @@ species player {
 				best <- vert;
 			}
 			rays[ray] <- line(location, best);
-    		walls <+ pair(ray, location distance_to best);
+			let corrected_depth <- location distance_to best;
+			// to counter fishbowl effect
+			corrected_depth <- corrected_depth * cos(heading - ray_angle);
+    		walls <+ pair(ray, corrected_depth);
 			
 			ray_angle <- ray_angle + step_angle;
 		}
@@ -365,7 +368,17 @@ species player {
 		draw line(location, {location.x + 3 * cos(heading), location.y + 3 * sin(heading)}) color:#yellow width:3;
 	}
 	
+	// darkens objects farther away
+	float max_vision <- 15#m;
+	rgb darkens(rgb init_color, float distance){
+		list<float> c <- to_hsb(init_color);
+		c[2] <- exp(-distance/max_vision);
+		return hsb(c[0],c[1],c[2]);
+	}
+	
 	aspect eye_of_the_beholder {
+		// TODO: darken floor and ceiling too (needs to draw by slices too)
+		
 		// draw floor
 		draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}+{world.shape.width/2,world.shape.height/4} color:#green;
 		
@@ -379,10 +392,13 @@ species player {
 		loop wall over:walls {
 			float x_start <- wall.key * wall_width;
 			float half_height <- wall_half_height/wall.value;
+			// we draw the wall
 			draw rectangle(
 				{x_start,max(world.shape.height/2-half_height, 0)},
 				{x_start+wall_width,min(world.shape.height/2+half_height,world.shape.height)}
-			) color:#brown;
+			) color:darkens(#brown, wall.value);
+			//we draw the floor
+			
 		}
 	}
 }
