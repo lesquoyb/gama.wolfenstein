@@ -10,12 +10,16 @@ model raycasting
 
 /* Insert your model definition here */
 
+
 global {
+	
 	
 	//player events
 	bool catch_mouse;
 	string direction_asked <- "None" among:["None", "Left", "Right", "Front", "Back"];
 	float asked_heading;
+	
+	image wall_txt <- image(image_file("../includes/wall.png"));
 	
 	// game life cycle
 	float last_frame_time;
@@ -27,6 +31,9 @@ global {
 	float cell_width 	<- world.shape.width/nb_cells_width;
 	float cell_height	<- world.shape.height/nb_cells_height;
 	
+	// general helpers
+	float epsilon <- 0.00001;// a small number to help with some calculations
+	
 	init {
 		
 		last_frame_time <- machine_time#ms;
@@ -34,9 +41,11 @@ global {
 		create baddy number:10;
 		
 	}
+	
+
 	reflex game_loop {
 		float current <- machine_time#ms;
-		float delta <- current - last_frame_time + 0.00001;// adding epsilon to cancel divisions by zero
+		float delta <- current - last_frame_time + epsilon;// adding epsilon to cancel divisions by zero
 		
 		do game_loop(delta);
 	
@@ -54,7 +63,7 @@ global {
 		do mouse_move;
 		
 		// process movement
-		ask player{
+		ask player {
 			heading <- asked_heading;
 			do process_movement(delta);
 			do update_rays;
@@ -78,8 +87,10 @@ global {
 	action mouse_move {
 		if catch_mouse {
 			ask player {
-				let pt <- #user_location - location;
-				asked_heading <- atan2(pt.y,pt.x);
+				float direction <- world.shape.width/2 - (#user_location).x;
+				float angle <- direction/(world.shape.width/2)*half_FOV;
+//				write "" +angle + " " + heading;
+				asked_heading <- heading - angle;
 			}			
 		}
 	}
@@ -99,7 +110,7 @@ global {
 }
 
 
-// The game map, describe the location of walls and enemies
+// The game map, describes the location of walls and enemies
 grid game_map width:nb_cells_width height:nb_cells_height{
 
 	string type <- "floor" among:["floor", "wall"];
@@ -140,13 +151,22 @@ species player {
 	
 	// field of view
 	list<geometry> rays <- list_with(nb_rays, nil);
-	list<pair<int,float>> walls;
+	list walls;
 	list<point> enemies;
 	
 	init {
 		loop while:(game_map overlapping (shape at_location location)) one_matches (each.type = "wall"){
 			location <- any_location_in(world.shape);
 		}
+	}
+	
+	float better_mod(float a, float base) {
+		return a - floor(a/base) * base;
+	}
+	
+	float fmod(float a, float n) {
+		int times <- a mod n;
+		return a - n * times;
 	}
 	
 	reflex update_heading {
@@ -159,11 +179,7 @@ species player {
 	float half_FOV <- FOV/2;
 	int nb_rays <- 100;
 	float step_angle <- FOV/nb_rays;
-	float scale <- world.shape.width/2/nb_rays;
-	float max_depth <- 100#m;
-	float depth_inc <- 1#m;
-	float epsilon <- 0.0001;
-	list<geometry> points;
+	//list<geometry> points;
 	
 	// fills the rays list with all the rays of the fov of the player
 	action update_rays {
@@ -172,15 +188,12 @@ species player {
 		let oy <- location.y;
 		let x_map <- int(location.x/cell_width)*cell_width;
 		let y_map <- int(location.y/cell_height)*cell_height;
-		//write "map " + x_map + " " + y_map + " coord" + ox + " " +oy ;
 		
-//		rays <- list_with(nb_rays, nil); //todo remove for optimisation
 		walls <- [];
 		let ray_angle <- heading - half_FOV;
 		loop ray from:0 to: nb_rays-1 {
 			let sin_a <- sin(ray_angle);
 			let cos_a <- cos(ray_angle);
-			//write ray_angle;
 			float depth_vert;
 			float depth_hor;
 			
@@ -215,12 +228,9 @@ species player {
 				loop i from:0 to:int(sqrt(nb_cells_width*nb_cells_width + nb_cells_height*nb_cells_height))-1 {
 					int x <- int(int(x_vert)/cell_width);
 	    			int y <- int(int(y_vert)/cell_height);
-	    			//write "test " + x + " " + y;
+	    			
 	    			// if we are out of map or touched a wall it's over
 	    			if x < 0 or x >= nb_cells_width or y < 0 or y >= nb_cells_height{
-	            		//write "reached border " + x_vert + " " + y_vert; 
-	            		//rays[ray] <- line(location,  {x_vert, y_vert});
-	            		//points <- points + p;
 	    				break;
 	    			} 
 	    			else {
@@ -228,9 +238,6 @@ species player {
 	    					
 	    				}
 	    				if game_map[x,y].type = "wall"{
-//		            		rays[ray] <- line(location,  {x_vert, y_vert});
-//		            		walls <+ pair(ray, depth_vert);
-							//write "wall " + x_vert + " " + y_vert; 
 			                break;
 		            	}
 		            }
@@ -270,12 +277,9 @@ species player {
 				loop i from:0 to:int(sqrt(nb_cells_width*nb_cells_width + nb_cells_height*nb_cells_height))-1 {
 					int x <- int(int(x_hor)/cell_width);
 	    			int y <- int(int(y_hor)/cell_height);
-	    			//write "test " + x + " " + y;	    			
+
 	    			// if we are out of map or touched a wall it's over
 	    			if x < 0 or x >= nb_cells_width or y < 0 or y >= nb_cells_height{
-	            		//write "reached border " + x_vert + " " + y_vert; 
-	            		rays[ray] <- line(location,  {x_hor, y_hor});
-//	            		points <- points + p;
 	    				break;
 	    			} 
 	    			else {
@@ -283,9 +287,6 @@ species player {
 	    					
 	    				}
 	    				if game_map[x,y].type = "wall"{
-							//write "wall " + x_vert + " " + y_vert; 
-//							rays[ray] <- line(location,  {x_hor, y_hor});
-//	            			points <- points + p;
 			                break;
 		            	}
 		            }
@@ -297,19 +298,28 @@ species player {
 			
 			// we check which one of the vert or hor is the shortest 
 			point hor 	<- {x_hor, y_hor};
-			let vert	<- {x_vert, y_vert};
+			point vert	<- {x_vert, y_vert};
 			point best;
+			float offset;
 			if location distance_to hor < location distance_to vert {
 				best <- hor;
+				offset <- better_mod(y_vert, cell_height);
+				if cos_a < 0 {
+					offset <- cell_width - offset;
+				}
 			}
 			else {
 				best <- vert;
+				offset <- better_mod(x_hor, cell_width);
+				if sin_a > 0 {
+					offset <- cell_width - x_hor;
+				}
 			}
 			rays[ray] <- line(location, best);
 			let corrected_depth <- location distance_to best;
 			// to counter fishbowl effect
 			corrected_depth <- corrected_depth * cos(heading - ray_angle);
-    		walls <+ pair(ray, corrected_depth);
+    		walls <+ list(ray, corrected_depth,offset);
 			
 			ray_angle <- ray_angle + step_angle;
 		}
@@ -361,9 +371,9 @@ species player {
 		loop ray over:rays {
 			draw ray color:#green;		
 		}
-		loop p over:points {
-			draw p color:#brown;
-		}
+//		loop p over:points {
+//			draw p color:#brown;
+//		}
 		
 		draw line(location, {location.x + 3 * cos(heading), location.y + 3 * sin(heading)}) color:#yellow width:3;
 	}
@@ -371,34 +381,43 @@ species player {
 	// darkens objects farther away
 	float max_vision <- 15#m;
 	rgb darkens(rgb init_color, float distance){
-		list<float> c <- to_hsb(init_color);
-		c[2] <- exp(-distance/max_vision);
+		list<float> c <- list<float>(to_hsb(init_color));
+		c[2] <- max(c[2], exp(-distance/max_vision));
 		return hsb(c[0],c[1],c[2]);
 	}
 	
 	aspect eye_of_the_beholder {
 		// TODO: darken floor and ceiling too (needs to draw by slices too)
 		
-		// draw floor
-		draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}+{world.shape.width/2,world.shape.height/4} color:#green;
-		
-		// draw ceiling
-		draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}-{-world.shape.width/2,world.shape.height/4} color:#blue;
+//		// draw floor
+//		draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}+{world.shape.width/2,world.shape.height/4} color:#green;
+//		
+//		// draw ceiling
+//		draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}-{-world.shape.width/2,world.shape.height/4} color:#blue;
 		
 		// draw obstacles
 		let wall_base_height <- world.shape.height;
 		let wall_half_height <- wall_base_height/2;
 		let wall_width <- world.shape.width/nb_rays;
+		//let wall_txt_scaled_width <- length(wall_txt)/cell_width;
 		loop wall over:walls {
-			float x_start <- wall.key * wall_width;
-			float half_height <- wall_half_height/wall.value;
-			// we draw the wall
-			draw rectangle(
-				{x_start,max(world.shape.height/2-half_height, 0)},
-				{x_start+wall_width,min(world.shape.height/2+half_height,world.shape.height)}
-			) color:darkens(#brown, wall.value);
-			//we draw the floor
 			
+			float x_start <- float(wall[0]);
+			float depth <- float(wall[1]);
+			float half_height <- wall_half_height/depth;
+			float full_height <- half_height*2;
+			float ratio <- wall_txt.width/cell_width;
+			float offset <- float(wall[2]) * ratio;
+			
+			// cut the right section of the texture
+			int pxl_width 	<- int(wall_txt.width/nb_rays);
+			int pxl_height 	<- wall_txt.height;
+			image wall_part <- wall_txt clipped_with (offset, 0, pxl_width, pxl_height) 
+								with_size (pxl_width, pxl_height* full_height/wall_width) // we apply the proportions we need
+								;
+			// we draw the wall
+			draw wall_part at:{x_start* wall_width + wall_width/2,max(world.shape.height/2-half_height/2, 0)} 
+							size:{wall_width, half_height*2};
 		}
 	}
 }
@@ -430,11 +449,32 @@ experiment test autorun:true{
 	
 	
 	output synchronized:true{
-		layout horizontal([0::50, 1::50]) navigator:false editors:false parameters:false consoles:false tray:false;
-		display logic type:2d toolbar:true {
-			grid game_map border:#black;
-			species player;
-			species baddy;
+//		layout horizontal([0::50, 1::50]) navigator:false editors:false parameters:false consoles:true tray:true;
+//		display logic type:2d toolbar:false {
+//			grid game_map border:#black;
+//			species player;
+//			species baddy;
+//			event #arrow_up 	action:up;
+//			event #arrow_down 	action:down;
+//			event #arrow_left 	action:left;
+//			event #arrow_right 	action:right;
+//			//event mouse_move 	action:mouse_move;{ask simulation {do mouse_move;}}
+////			event #mouse_down	action:mouse_down;
+////			event #mouse_enter	action:mouse_enter;
+////			event #mouse_exit	action:mouse_exit;
+//		}
+//		
+		layout navigator:false editors:false parameters:false consoles:true tray:true;
+		display rendering type:3d axes:false  toolbar:false antialias:false{
+			camera 'default' location: {50.0,50.0022,127.6281} target: {50.0,50.0,0.0} locked:false;			
+			
+			species player aspect:eye_of_the_beholder;	
+			
+			graphics g{	
+				draw "fps: " + mean(fps) with_precision 1 at:{0,-1} color:#red font:font("helvetica",14, #bold);					
+			}
+			
+			
 			event #arrow_up 	action:up;
 			event #arrow_down 	action:down;
 			event #arrow_left 	action:left;
@@ -443,14 +483,7 @@ experiment test autorun:true{
 			event #mouse_down	action:mouse_down;
 			event #mouse_enter	action:mouse_enter;
 			event #mouse_exit	action:mouse_exit;
-		}
-		display rendering type:3d axes:false  toolbar:false {
-		camera 'default' location: {50.0,50.0022,127.6281} target: {50.0,50.0,0.0} locked:true;			
-		species player aspect:eye_of_the_beholder;	
 			
-			graphics g{	
-				draw "fps: " + mean(fps) with_precision 1 at:{0,-1} color:#red font:font("helvetica",14, #bold);					
-			}
 		}
 	}
 }
