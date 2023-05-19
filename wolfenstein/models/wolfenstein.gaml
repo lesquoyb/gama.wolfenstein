@@ -381,6 +381,22 @@ species player {
 		return hsb(c[0],c[1],c[2]);
 	}
 	
+	map<int, image> images <- [];
+	
+	image getSlicedImage(int offset, int pxl_width, int pxl_height, float ratio){
+		image cached <- images[offset];
+		if cached != nil {
+			return cached;
+		}
+		 cached <- wall_txt clipped_with (offset, 0, pxl_width, pxl_height) 
+							with_size (pxl_width, pxl_height* ratio) // we apply the proportions we need
+							;
+		images[offset] <- cached;
+		return cached;
+		
+	}
+	
+	
 	aspect eye_of_the_beholder {
 		// TODO: darken floor and ceiling too (needs to draw by slices too)
 		
@@ -404,14 +420,11 @@ species player {
 			float depth 		<- float(wall[1]);
 			float half_height 	<- corrected_wall_half_height/(depth+epsilon);
 			float full_height 	<- half_height*2;
-			float offset 		<- float(wall[2]) * (wall_txt.width - pxl_width);
+			int offset 			<- int(float(wall[2]) * (wall_txt.width - pxl_width));
 
 			// cut the right section of the texture
-			image wall_part <- wall_txt 
-								clipped_with (offset, 0, pxl_width, pxl_height) 
-								with_size (pxl_width, pxl_height* full_height/wall_width) // we apply the proportions we need
-								;
-			//write "" + x_start+ " " + offset + " " + float(wall[2]);
+			image wall_part <- getSlicedImage(offset, pxl_width, pxl_height, full_height/wall_width);
+			
 			// we draw the wall
 			draw wall_part at:{x_start* wall_width + wall_width/2,max(world.shape.height/2-half_height/2, 0)} 
 							size:{wall_width, full_height};
@@ -425,7 +438,7 @@ species player {
 	}
 }
 
-experiment test autorun:false{
+experiment test autorun:true{
 	
 	
 	action up{
