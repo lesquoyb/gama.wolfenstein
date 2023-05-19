@@ -400,11 +400,6 @@ species player {
 	aspect eye_of_the_beholder {
 		// TODO: darken floor and ceiling too (needs to draw by slices too)
 		
-//		// draw floor
-//		draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}+{world.shape.width/2,world.shape.height/4} color:#green;
-//		
-//		// draw ceiling
-//		draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}-{-world.shape.width/2,world.shape.height/4} color:#blue;
 		
 		// draw obstacles
 		float wall_base_height <- world.shape.height;
@@ -433,6 +428,7 @@ species player {
 //				{x_start,max(world.shape.height/2-half_height, 0)},
 //				{x_start+wall_width,min(world.shape.height/2+half_height,world.shape.height)}
 //			) color:darkens(#brown, depth);
+
 
 		}
 	}
@@ -483,6 +479,14 @@ experiment test autorun:true{
 		layout navigator:false editors:false parameters:false consoles:true tray:true;
 		display rendering type:3d axes:false  toolbar:false antialias:false{
 			camera 'default' location: {50.0,50.0022,127.6281} target: {50.0,50.0,0.0} locked:false;			
+			
+			graphics background {
+				// draw floor
+				draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}+{world.shape.width/2,world.shape.height/4} color:#green;
+				
+				// draw ceiling
+				draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}-{-world.shape.width/2,world.shape.height/4} color:#blue;
+			}
 			
 			species player aspect:eye_of_the_beholder;	
 			
