@@ -25,6 +25,7 @@ global {
 	list<float> fps;
 	
 	// world dimensions
+	geometry shape		<- rectangle(100, 100); // basically screen size, many things break when changing the dimensions
 	int nb_cells_width	<- 20;
 	int nb_cells_height <- 20;
 	float cell_width 	<- world.shape.width/nb_cells_width;
@@ -59,7 +60,7 @@ global {
 	action game_loop(float delta){
 
 		// refresh heading
-		do calculate_heading;
+		do calculate_heading(delta);
 		
 		// process movement
 		ask player {
@@ -83,13 +84,15 @@ global {
 		direction_asked <- "Right";
 	}
 	
-	action calculate_heading {
+	point last_mouse_position <- {world.shape.width/2, world.shape.height};
+	action calculate_heading (float delta){
 		if catch_mouse {
+			point delta_mouse <- #user_location - last_mouse_position;
+			float length <- delta_mouse distance_to {0,0};
 			ask player {
-				point direction <- {world.shape.width/2, world.shape.height} - (#user_location);
-				float angle <- atan2(direction.y, direction.x);
-				asked_heading <- angle;
-			}			
+				asked_heading <- heading + delta_mouse.x/(length+epsilon)*delta ;
+			}	
+			last_mouse_position <- #user_location;		
 		}
 	}
 	
@@ -476,9 +479,9 @@ experiment test autorun:true{
 ////			event #mouse_exit	action:mouse_exit;
 //		}
 		
-		layout navigator:false editors:false parameters:false consoles:true tray:true;
+		layout navigator:false editors:false parameters:false consoles:false tray:true;
 		display rendering type:3d axes:false  toolbar:false antialias:false{
-			camera 'default' location: {50.0,50.0022,127.6281} target: {50.0,50.0,0.0} locked:false;			
+			camera 'default' location: {50.0,50.0022,127.6281} target: {50.0,50.0,0.0} locked:true;			
 			
 			graphics background {
 				// draw floor
