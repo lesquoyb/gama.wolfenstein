@@ -8,7 +8,6 @@
 
 model raycasting
 
-/* Insert your model definition here */
 
 
 global {
@@ -60,7 +59,7 @@ global {
 	action game_loop(float delta){
 
 		// refresh heading
-		do mouse_move;
+		do calculate_heading;
 		
 		// process movement
 		ask player {
@@ -84,13 +83,12 @@ global {
 		direction_asked <- "Right";
 	}
 	
-	action mouse_move {
+	action calculate_heading {
 		if catch_mouse {
 			ask player {
-				float direction <- world.shape.width/2 - (#user_location).x;
-				float angle <- direction/(world.shape.width/2)*half_FOV;
-//				write "" +angle + " " + heading;
-				asked_heading <- heading - angle;
+				point direction <- {world.shape.width/2, world.shape.height} - (#user_location);
+				float angle <- atan2(direction.y, direction.x);
+				asked_heading <- angle;
 			}			
 		}
 	}
@@ -106,7 +104,6 @@ global {
 	action mouse_exit {
 		catch_mouse <- false;
 	}
-	
 }
 
 
@@ -164,10 +161,6 @@ species player {
 		return a - floor(a/base) * base;
 	}
 	
-	float fmod(float a, float n) {
-		int times <- a mod n;
-		return a - n * times;
-	}
 	
 	reflex update_heading {
 		let loc <- #user_location - location;
@@ -303,17 +296,19 @@ species player {
 			float offset;
 			if location distance_to hor < location distance_to vert {
 				best <- hor;
-				offset <- better_mod(y_vert, cell_height);
-				if cos_a < 0 {
+				offset <- better_mod(x_hor, cell_width);
+				if sin_a > 0 {
 					offset <- cell_width - offset;
 				}
+				offset <- offset/cell_width; // we scale the offset 
 			}
 			else {
 				best <- vert;
-				offset <- better_mod(x_hor, cell_width);
-				if sin_a > 0 {
-					offset <- cell_width - x_hor;
+				offset <- better_mod(y_vert, cell_height);
+				if cos_a <= 0 {
+					offset <- cell_height - offset;
 				}
+				offset <- offset/cell_height; // we scale the offset 
 			}
 			rays[ray] <- line(location, best);
 			let corrected_depth <- location distance_to best;
@@ -341,7 +336,7 @@ species player {
 				dy <- adjusted_speed * sin(heading);
 			}
 			match "Left" {
-				dx <- adjusted_speed * sin(heading);
+				dx <-  adjusted_speed * sin(heading);
 				dy <- -adjusted_speed * cos(heading);	
 			}
 			match "Back" {
@@ -350,7 +345,7 @@ species player {
 			}
 			match "Right" {
 				dx <- -adjusted_speed * sin(heading);
-				dy <- adjusted_speed * cos(heading);				
+				dy <-  adjusted_speed * cos(heading);				
 			}
 		}
 		
@@ -396,33 +391,41 @@ species player {
 //		draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}-{-world.shape.width/2,world.shape.height/4} color:#blue;
 		
 		// draw obstacles
-		let wall_base_height <- world.shape.height;
-		let wall_half_height <- wall_base_height/2;
-		let wall_width <- world.shape.width/nb_rays;
-		//let wall_txt_scaled_width <- length(wall_txt)/cell_width;
+		float wall_base_height <- world.shape.height;
+		float wall_half_height <- wall_base_height/2;
+		float corrected_wall_half_height <- wall_half_height/tan(half_FOV);
+		float wall_width	<- world.shape.width/nb_rays;
+		int pxl_width 		<- int(wall_txt.width/nb_rays);
+		int pxl_height 		<- wall_txt.height;
+
 		loop wall over:walls {
 			
-			float x_start <- float(wall[0]);
-			float depth <- float(wall[1]);
-			float half_height <- wall_half_height/depth;
-			float full_height <- half_height*2;
-			float ratio <- wall_txt.width/cell_width;
-			float offset <- float(wall[2]) * ratio;
-			
+			float x_start		<- float(wall[0]);
+			float depth 		<- float(wall[1]);
+			float half_height 	<- corrected_wall_half_height/(depth+epsilon);
+			float full_height 	<- half_height*2;
+			float offset 		<- float(wall[2]) * (wall_txt.width - pxl_width);
+
 			// cut the right section of the texture
-			int pxl_width 	<- int(wall_txt.width/nb_rays);
-			int pxl_height 	<- wall_txt.height;
-			image wall_part <- wall_txt clipped_with (offset, 0, pxl_width, pxl_height) 
+			image wall_part <- wall_txt 
+								clipped_with (offset, 0, pxl_width, pxl_height) 
 								with_size (pxl_width, pxl_height* full_height/wall_width) // we apply the proportions we need
 								;
+			//write "" + x_start+ " " + offset + " " + float(wall[2]);
 			// we draw the wall
 			draw wall_part at:{x_start* wall_width + wall_width/2,max(world.shape.height/2-half_height/2, 0)} 
-							size:{wall_width, half_height*2};
+							size:{wall_width, full_height};
+
+//			draw rectangle(
+//				{x_start,max(world.shape.height/2-half_height, 0)},
+//				{x_start+wall_width,min(world.shape.height/2+half_height,world.shape.height)}
+//			) color:darkens(#brown, depth);
+
 		}
 	}
 }
 
-experiment test autorun:true{
+experiment test autorun:false{
 	
 	
 	action up{
@@ -463,7 +466,7 @@ experiment test autorun:true{
 ////			event #mouse_enter	action:mouse_enter;
 ////			event #mouse_exit	action:mouse_exit;
 //		}
-//		
+		
 		layout navigator:false editors:false parameters:false consoles:true tray:true;
 		display rendering type:3d axes:false  toolbar:false antialias:false{
 			camera 'default' location: {50.0,50.0022,127.6281} target: {50.0,50.0,0.0} locked:false;			
@@ -486,4 +489,6 @@ experiment test autorun:true{
 			
 		}
 	}
+	
+	
 }
