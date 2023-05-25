@@ -16,7 +16,8 @@ global {
 	//player events
 	bool catch_mouse;
 	string direction_asked <- "None" among:["None", "Left", "Right", "Front", "Back"];
-	float asked_heading;
+	float asked_heading_delta;
+	float angular_speed <- 30.0;
 	
 	image wall_txt <- image(image_file("../includes/wall.png"));
 	
@@ -33,15 +34,54 @@ global {
 	
 	// general helpers
 	float epsilon <- 0.00001;// a small number to help with some calculations
+		
+	
+	// constants for raycasting algorithm
+	float FOV <- 90.0;
+	float half_FOV <- FOV/2;
+	int nb_rays <- 100;
+	float step_angle <- FOV/nb_rays;
+	
+	
+	// draw obstacles
+	float wall_base_height <- world.shape.height;
+	float wall_half_height <- wall_base_height/2;
+	float wall_width	<- shape.width/nb_rays;
+	int pxl_width 		<- int(wall_txt.width/nb_rays);
+	int pxl_height 		<- wall_txt.height;
+
 	
 	init {
 		
 		last_frame_time <- machine_time#ms;
 		create player;
 		create baddy number:10;
+//		do pre_slice_walls;
 		
 	}
 	
+	
+//	action pre_slice_walls{
+//		loop offset from:0 to:wall_txt.width-pxl_width-1{
+//			let i <- getSlicedImage(offset, 1);
+//		}
+//	}
+	
+	map<int, image> images <- [];
+	image getSlicedImage(int offset, float ratio){
+		image cached <- images[offset];
+		if cached != nil {
+			return cached;
+		}
+		 cached <- wall_txt clipped_with (offset, 0, pxl_width, pxl_height)
+ 					with_size (pxl_width, pxl_height* ratio) // we apply the proportions we need
+ 					//TODO: it's correct for the first rendering but not after (shouldn't be too ugly with normal range of values
+ 					// we need that for the moment as gama is unable to release the memory of images
+		 					;
+		images[offset] <- cached;
+		return cached;
+		
+	}
 
 	reflex game_loop {
 		float current <- machine_time#ms;
@@ -57,14 +97,13 @@ global {
 	}
 	
 	
+	
 	action game_loop(float delta){
-
-		// refresh heading
-		do calculate_heading(delta);
 		
 		// process movement
 		ask player {
-			heading <- asked_heading;
+			heading <- heading - asked_heading_delta * delta;
+			asked_heading_delta <- 0.0;
 			do process_movement(delta);
 			do update_rays;
 		}
@@ -83,18 +122,13 @@ global {
 	action arrow_right {
 		direction_asked <- "Right";
 	}
-	
-	point last_mouse_position <- {world.shape.width/2, world.shape.height};
-	action calculate_heading (float delta){
-		if catch_mouse {
-			point delta_mouse <- #user_location - last_mouse_position;
-			float length <- delta_mouse distance_to {0,0};
-			ask player {
-				asked_heading <- heading + delta_mouse.x/(length+epsilon)*delta ;
-			}	
-			last_mouse_position <- #user_location;		
-		}
+	action rotate_right{
+		asked_heading_delta <- -angular_speed;
 	}
+	action rotate_left{
+		asked_heading_delta <- angular_speed;
+	}
+
 	
 	action mouse_down {
 		
@@ -164,18 +198,6 @@ species player {
 		return a - floor(a/base) * base;
 	}
 	
-	
-	reflex update_heading {
-		let loc <- #user_location - location;
-		heading <- atan2(loc.y, loc.x);
-	}
-	
-	// constants for raycasting algorithm
-	float FOV <- 90.0;
-	float half_FOV <- FOV/2;
-	int nb_rays <- 100;
-	float step_angle <- FOV/nb_rays;
-	//list<geometry> points;
 	
 	// fills the rays list with all the rays of the fov of the player
 	action update_rays {
@@ -384,47 +406,28 @@ species player {
 		return hsb(c[0],c[1],c[2]);
 	}
 	
-	map<int, image> images <- [];
-	
-	image getSlicedImage(int offset, int pxl_width, int pxl_height, float ratio){
-		image cached <- images[offset];
-		if cached != nil {
-			return cached;
-		}
-		 cached <- wall_txt clipped_with (offset, 0, pxl_width, pxl_height) 
-							with_size (pxl_width, pxl_height* ratio) // we apply the proportions we need
-							;
-		images[offset] <- cached;
-		return cached;
-		
-	}
+
 	
 	
 	aspect eye_of_the_beholder {
 		// TODO: darken floor and ceiling too (needs to draw by slices too)
-		
-		
-		// draw obstacles
-		float wall_base_height <- world.shape.height;
-		float wall_half_height <- wall_base_height/2;
 		float corrected_wall_half_height <- wall_half_height/tan(half_FOV);
-		float wall_width	<- world.shape.width/nb_rays;
-		int pxl_width 		<- int(wall_txt.width/nb_rays);
-		int pxl_height 		<- wall_txt.height;
-
+		
 		loop wall over:walls {
 			
 			float x_start		<- float(wall[0]);
 			float depth 		<- float(wall[1]);
-			float half_height 	<- corrected_wall_half_height/(depth+epsilon);
+			float half_height 	<- min(corrected_wall_half_height/(depth+epsilon), world.shape.height/2);
 			float full_height 	<- half_height*2;
 			int offset 			<- int(float(wall[2]) * (wall_txt.width - pxl_width));
 
 			// cut the right section of the texture
-			image wall_part <- getSlicedImage(offset, pxl_width, pxl_height, full_height/wall_width);
+			image wall_part <- world.getSlicedImage(offset, full_height/wall_width) 
+							//	with_size (pxl_width, pxl_height * full_height/wall_width)
+								;
 			
 			// we draw the wall
-			draw wall_part at:{x_start* wall_width + wall_width/2,max(world.shape.height/2-half_height/2, 0)} 
+			draw wall_part at:{x_start* wall_width + wall_width/2, world.shape.height/2-half_height/2} 
 							size:{wall_width, full_height};
 
 //			draw rectangle(
@@ -452,6 +455,12 @@ experiment test autorun:true{
 	action right{
 		ask simulation {do arrow_right;}
 	}
+	action rotate_right {
+		ask simulation {do rotate_right;}
+	}
+	action rotate_left {
+		ask simulation {do rotate_left;}
+	}
 	action mouse_down{
 		ask simulation {do mouse_down;}
 	}
@@ -468,7 +477,7 @@ experiment test autorun:true{
 //		display logic type:2d toolbar:false {
 //			grid game_map border:#black;
 //			species player;
-//			species baddy;
+//			species baddy;F
 //			event #arrow_up 	action:up;
 //			event #arrow_down 	action:down;
 //			event #arrow_left 	action:left;
@@ -502,13 +511,19 @@ experiment test autorun:true{
 			event #arrow_down 	action:down;
 			event #arrow_left 	action:left;
 			event #arrow_right 	action:right;
-			//event mouse_move 	action:mouse_move;{ask simulation {do mouse_move;}}
-			event #mouse_down	action:mouse_down;
-			event #mouse_enter	action:mouse_enter;
-			event #mouse_exit	action:mouse_exit;
+			event 'e'			action:rotate_right;
+			event 'q'			action:rotate_left;
+//			//event mouse_move 	action:mouse_move;{ask simulation {do mouse_move;}}
+//			event #mouse_down	action:mouse_down;
+//			event #mouse_enter	action:mouse_enter;
+//			event #mouse_exit	action:mouse_exit;
 			
 		}
 	}
-	
+//	
+//	
+//	reflex debug {
+//		do compact_memory();
+//	}
 	
 }
