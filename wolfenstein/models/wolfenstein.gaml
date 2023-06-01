@@ -19,7 +19,10 @@ global {
 	float asked_heading_delta;
 	float angular_speed <- 30.0;
 	
-	image wall_txt <- image(image_file("../includes/wall.png"));
+	image wall_txt 	<- image(image_file("../includes/wall2.png"));
+	image floor		<- image(image_file("../includes/floor2.png"));
+	image sky		<- image(image_file("../includes/sky2.png"));
+	image gun		<- image(image_file("../includes/gun2.png"));
 	
 	// game life cycle
 	float last_frame_time;
@@ -67,21 +70,22 @@ global {
 //		}
 //	}
 	
-	map<int, image> images <- [];
-	image getSlicedImage(int offset, float ratio){
-		image cached <- images[offset];
-		if cached != nil {
-			return cached;
-		}
-		 cached <- wall_txt clipped_with (offset, 0, pxl_width, pxl_height)
- 					with_size (pxl_width, pxl_height* ratio) // we apply the proportions we need
- 					//TODO: it's correct for the first rendering but not after (shouldn't be too ugly with normal range of values
- 					// we need that for the moment as gama is unable to release the memory of images
-		 					;
-		images[offset] <- cached;
-		return cached;
-		
-	}
+//	map<int, image> images <- [];
+//	// Lazy initialisation of slices of images
+//	image getSlicedImage(int offset, float ratio){
+//		image cached <- images[offset];
+//		if cached != nil {
+//			return cached;
+//		}
+//		 cached <- wall_txt clipped_with (offset, 0, pxl_width, pxl_height)
+// 					with_size (pxl_width, pxl_height* ratio) // we apply the proportions we need
+// 					//TODO: it's correct for the first rendering but not after (shouldn't be too ugly with normal range of values
+// 					// we need that for the moment as gama is unable to release the memory of images
+//		 					;
+//		images[offset] <- cached;
+//		return cached;
+//		
+//	}
 
 	reflex game_loop {
 		float current <- machine_time#ms;
@@ -422,8 +426,9 @@ species player {
 			int offset 			<- int(float(wall[2]) * (wall_txt.width - pxl_width));
 
 			// cut the right section of the texture
-			image wall_part <- world.getSlicedImage(offset, full_height/wall_width) 
-							//	with_size (pxl_width, pxl_height * full_height/wall_width)
+			image wall_part <- wall_txt clipped_with (offset, 0, pxl_width, pxl_height)
+								//world.getSlicedImage(offset, full_height/wall_width) 
+								with_size (pxl_width, pxl_height * full_height/wall_width)
 								;
 			
 			// we draw the wall
@@ -494,10 +499,17 @@ experiment test autorun:true{
 			
 			graphics background {
 				// draw floor
-				draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}+{world.shape.width/2,world.shape.height/4} color:#green;
-				
+				//draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}+{world.shape.width/2,world.shape.height/4} color:#green;
+				draw floor 	at:{0, world.shape.height/2}+{world.shape.width/2,world.shape.height/4} 
+							size:{world.shape.width, world.shape.height/2}
+							;
+							
 				// draw ceiling
-				draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}-{-world.shape.width/2,world.shape.height/4} color:#blue;
+//				draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}-{-world.shape.width/2,world.shape.height/4} color:#blue;
+				draw sky 	at:{0, world.shape.height/2}-{-world.shape.width/2,world.shape.height/4} 
+							size:{world.shape.width, world.shape.height/2}
+							;
+			
 			}
 			
 			species player aspect:eye_of_the_beholder;	
@@ -506,6 +518,11 @@ experiment test autorun:true{
 				draw "fps: " + mean(fps) with_precision 1 at:{0,-1} color:#red font:font("helvetica",14, #bold);					
 			}
 			
+			graphics gun_layer {
+				draw gun 	at:{world.shape.width*0.75, world.shape.height*0.75}
+							size:{world.shape.width/2, world.shape.height/2}
+							;
+			}
 			
 			event #arrow_up 	action:up;
 			event #arrow_down 	action:down;
