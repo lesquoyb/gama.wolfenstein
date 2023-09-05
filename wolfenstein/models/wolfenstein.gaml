@@ -417,7 +417,9 @@ species player {
 		// TODO: darken floor and ceiling too (needs to draw by slices too)
 		float corrected_wall_half_height <- wall_half_height/tan(half_FOV);
 		
-		loop wall over:walls {
+		//we copy the list in order to avoid concurrent modifications
+		list walls_cp <- walls;
+		loop wall over:walls_cp {
 			
 			float x_start		<- float(wall[0]);
 			float depth 		<- float(wall[1]);
@@ -426,13 +428,14 @@ species player {
 			int offset 			<- int(float(wall[2]) * (wall_txt.width - pxl_width));
 
 			// cut the right section of the texture
-			image wall_part <- wall_txt clipped_with (offset, 0, pxl_width, pxl_height)
+			image wall_part <- wall_txt 
+								 clipped_with (offset, 0, pxl_width, pxl_height)
 								//world.getSlicedImage(offset, full_height/wall_width) 
 								with_size (pxl_width, pxl_height * full_height/wall_width)
 								;
 			
 			// we draw the wall
-			draw wall_part at:{x_start* wall_width + wall_width/2, world.shape.height/2-half_height/2} 
+			draw wall_part at:{x_start* wall_width + wall_width/2, world.shape.height/2-half_height/2, exp(-depth)} 
 							size:{wall_width, full_height};
 
 //			draw rectangle(
@@ -482,7 +485,7 @@ experiment test autorun:true{
 //		display logic type:2d toolbar:false {
 //			grid game_map border:#black;
 //			species player;
-//			species baddy;F
+//			species baddy;
 //			event #arrow_up 	action:up;
 //			event #arrow_down 	action:down;
 //			event #arrow_left 	action:left;
@@ -494,9 +497,9 @@ experiment test autorun:true{
 //		}
 		
 		layout navigator:false editors:false parameters:false consoles:false tray:true;
-		display rendering type:3d axes:false  toolbar:false antialias:false{
+		display rendering type:3d axes:false  toolbar:true antialias:false{
 			camera 'default' location: {50.0,50.0022,127.6281} target: {50.0,50.0,0.0} locked:true;			
-			
+			camera 'my_camera' location: #from_above locked: true;
 			graphics background {
 				// draw floor
 				//draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}+{world.shape.width/2,world.shape.height/4} color:#green;
