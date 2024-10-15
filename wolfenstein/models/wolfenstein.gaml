@@ -14,10 +14,9 @@ global {
 	
 	
 	//player events
-	bool catch_mouse;
 	string direction_asked <- "None" among:["None", "Left", "Right", "Front", "Back"];
 	float asked_heading_delta;
-	float angular_speed <- 30.0;
+	float angular_speed <- 100.0;
 	
 	image wall_txt 	<- image(image_file("../includes/wall2.png"));
 	image floor		<- image(image_file("../includes/floor2.png"));
@@ -42,7 +41,7 @@ global {
 	// constants for raycasting algorithm
 	float FOV <- 90.0;
 	float half_FOV <- FOV/2;
-	int nb_rays <- 100;
+	int nb_rays <- 150;
 	float step_angle <- FOV/nb_rays;
 	
 	
@@ -56,7 +55,7 @@ global {
 	
 	init {
 		
-		last_frame_time <- machine_time#ms;
+		last_frame_time <- gama.machine_time#ms;
 		create player;
 		create baddy number:10;
 //		do pre_slice_walls;
@@ -88,7 +87,7 @@ global {
 //	}
 
 	reflex game_loop {
-		float current <- machine_time#ms;
+		float current <- gama.machine_time#ms;
 		float delta <- current - last_frame_time + epsilon;// adding epsilon to cancel divisions by zero
 		
 		do game_loop(delta);
@@ -132,19 +131,6 @@ global {
 	action rotate_left{
 		asked_heading_delta <- angular_speed;
 	}
-
-	
-	action mouse_down {
-		
-	}
-	
-	action mouse_enter {
-		catch_mouse <- true;
-	}
-	
-	action mouse_exit {
-		catch_mouse <- false;
-	}
 }
 
 
@@ -183,13 +169,13 @@ species baddy {
 species player {
 	
 	// movement 
-	float speed <- 20#km/#h;
+	float speed <- 50#km/#h;
 	float heading;
 	geometry shape <- circle(1);
 	
 	// field of view
 	list<geometry> rays <- list_with(nb_rays, nil);
-	list walls;
+	map<int, list<float>> walls;
 	list<point> enemies;
 	
 	init {
@@ -343,7 +329,10 @@ species player {
 			let corrected_depth <- location distance_to best;
 			// to counter fishbowl effect
 			corrected_depth <- corrected_depth * cos(heading - ray_angle);
-    		walls <+ list(ray, corrected_depth,offset);
+			if ! (walls.keys contains ray) or (walls[ray][0] > corrected_depth) {
+	    		walls[ray] <- [corrected_depth,offset];
+				
+			}
 			
 			ray_angle <- ray_angle + step_angle;
 		}
@@ -418,7 +407,7 @@ species player {
 		float corrected_wall_half_height <- wall_half_height/tan(half_FOV);
 		
 		//we copy the list in order to avoid concurrent modifications
-		list walls_cp <- walls;
+		list walls_cp <- walls.keys collect list(each, walls[each][0], walls[each][1]);
 		loop wall over:walls_cp {
 			
 			float x_start		<- float(wall[0]);
@@ -431,12 +420,13 @@ species player {
 			image wall_part <- wall_txt 
 								 clipped_with (offset, 0, pxl_width, pxl_height)
 								//world.getSlicedImage(offset, full_height/wall_width) 
-								with_size (pxl_width, pxl_height * full_height/wall_width)
+//								with_size (pxl_width, pxl_height * full_height/wall_width)
 								;
 			
 			// we draw the wall
 			draw wall_part at:{x_start* wall_width + wall_width/2, world.shape.height/2-half_height/2, exp(-depth)} 
-							size:{wall_width, full_height};
+							size:{wall_width, full_height}
+							;
 
 //			draw rectangle(
 //				{x_start,max(world.shape.height/2-half_height, 0)},
@@ -448,10 +438,12 @@ species player {
 	}
 }
 
-experiment test autorun:true{
+experiment play autorun:true{
 	
-	
+	// We try to get 60 fps
+	float minimum_cycle_duration <- 1.0/60.0;
 	action up{
+		write "up";
 		ask simulation {do arrow_up;}
 	}
 	action down{
@@ -469,16 +461,10 @@ experiment test autorun:true{
 	action rotate_left {
 		ask simulation {do rotate_left;}
 	}
-	action mouse_down{
-		ask simulation {do mouse_down;}
-	}
-	action mouse_enter{
-		ask simulation {do mouse_enter;}
-	}
-	action mouse_exit{
-		ask simulation {do mouse_exit;}
-	}
-	
+
+//	reflex sync {
+//		do update_outputs(true);
+//	}
 	
 	output synchronized:true{
 //		layout horizontal([0::50, 1::50]) navigator:false editors:false parameters:false consoles:true tray:true;
@@ -517,14 +503,15 @@ experiment test autorun:true{
 			
 			species player aspect:eye_of_the_beholder;	
 			
-			graphics g{	
-				draw "fps: " + mean(fps) with_precision 1 at:{0,-1} color:#red font:font("helvetica",14, #bold);					
-			}
 			
 			graphics gun_layer {
 				draw gun 	at:{world.shape.width*0.75, world.shape.height*0.75}
 							size:{world.shape.width/2, world.shape.height/2}
 							;
+			}
+			
+			graphics g{	
+				draw "fps: " + mean(fps) with_precision 1 at:{0,-1} color:#red font:font("helvetica",14, #bold);					
 			}
 			
 			event #arrow_up 	action:up;
