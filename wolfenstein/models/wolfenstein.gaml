@@ -19,6 +19,7 @@ global {
 	float angular_speed <- 100.0;
 	
 	image wall_txt 	<- image(image_file("../includes/wall2.png"));
+	image enemy_txt	<- image(image_file("../includes/baddy.png"));
 	image floor		<- image(image_file("../includes/floor2.png"));
 	image sky		<- image(image_file("../includes/sky2.png"));
 	image gun		<- image(image_file("../includes/gun2.png"));
@@ -51,13 +52,15 @@ global {
 	float wall_width	<- shape.width/nb_rays;
 	int pxl_width 		<- int(wall_txt.width/nb_rays);
 	int pxl_height 		<- wall_txt.height;
+	int enemy_pxl_width 	<- int(enemy_txt.width/nb_rays);
+	int enemy_pxl_height	<- enemy_txt.height;
 
 	
 	init {
 		
 		last_frame_time <- gama.machine_time#ms;
 		create player;
-		create baddy number:10;
+		create baddy number:30;
 //		do pre_slice_walls;
 		
 	}
@@ -143,7 +146,7 @@ grid game_map width:nb_cells_width height:nb_cells_height{
 	init {
 		type <- rnd_choice(map(["floor"::0.8, "wall"::0.2]));
 		if type = "wall" {
-			color <- #red;
+			color <- #brown;
 		}
 		else {
 			color <- #grey;
@@ -153,8 +156,9 @@ grid game_map width:nb_cells_width height:nb_cells_height{
 
 }
 
-species baddy {
-	float heading;
+species baddy skills:[moving] {
+	
+//	geometry shape <- rectangle(cell_width,cell_height);
 	geometry shape <- rectangle(1,1);
 	rgb color <- #red;
 	
@@ -174,9 +178,9 @@ species player {
 	geometry shape <- circle(1);
 	
 	// field of view
-	list<geometry> rays <- list_with(nb_rays, nil);
+	list<geometry> rays <- list_with(nb_rays, nil); // for debug only
 	map<int, list<float>> walls;
-	list<point> enemies;
+	map<int, list<float>> enemies;
 	
 	init {
 		loop while:(game_map overlapping (shape at_location location)) one_matches (each.type = "wall"){
@@ -198,12 +202,16 @@ species player {
 		let y_map <- int(location.y/cell_height)*cell_height;
 		
 		walls <- [];
+		enemies <- [];
+		
 		let ray_angle <- heading - half_FOV;
 		loop ray from:0 to: nb_rays-1 {
 			let sin_a <- sin(ray_angle);
 			let cos_a <- cos(ray_angle);
 			float depth_vert;
 			float depth_hor;
+			bool hor_enemy <- false;
+			bool ver_enemy <- false;
 			
 			// ==========================================
 			// looking for intersection on vertical lines
@@ -242,9 +250,34 @@ species player {
 	    				break;
 	    			} 
 	    			else {
-	    				loop enemy over:game_map[x,y].enemies {
+	    				
+	    				// first we look for enemy collisions
+	    				float closest_enemy_x <- 0.0;
+	    				float closest_enemy_y <- 0.0;
+	    				float closest_enemy_dist <- world.shape.width;
+    					//probably not enough
+    					loop enemy over:game_map[x,y].enemies{
+							// we consider the enemy as a plane perpendicular to the current ray
+							// we need to compute the distance on the ray at which it intersects the plane
+							let t <- -((location.x - enemy.location.x) * cos_a + (location.y - enemy.location.y) * sin_a);
+							let x_on_ray <- location.x + t * cos_a;
+							let y_on_ray <- location.y + t * sin_a;
+							let distance <- enemy distance_to {x_on_ray, y_on_ray};
+							// If the enemy is close enough to be drawn
+							if distance <= enemy.shape.width/2{
+		    					ver_enemy <- true;
+		    					if distance < closest_enemy_dist {
+		    						closest_enemy_x <- x_on_ray;
+		    						closest_enemy_y <- y_on_ray;
+		    					}
+							}
+    					}
+    					if ver_enemy{
+							x_vert <- closest_enemy_x;
+							y_vert <- closest_enemy_y;
+    						break;
+    					}   					
 	    					
-	    				}
 	    				if game_map[x,y].type = "wall"{
 			                break;
 		            	}
@@ -291,9 +324,35 @@ species player {
 	    				break;
 	    			} 
 	    			else {
-	    				loop enemy over:game_map[x,y].enemies {
-	    					
-	    				}
+
+	    				
+	    				float closest_enemy_x <- 0.0;
+	    				float closest_enemy_y <- 0.0;
+	    				float closest_enemy_dist <- world.shape.width;
+	    				
+	    				//probably not enough
+    					loop enemy over:game_map[x,y].enemies{
+							// we consider the enemy as a plane perpendicular to the current ray
+							// we need to compute the distance on the ray at which it intersects the plane
+							let t <- -((location.x - enemy.location.x) * cos_a + (location.y - enemy.location.y) * sin_a);
+							let x_on_ray <- location.x + t * cos_a;
+							let y_on_ray <- location.y + t * sin_a;
+							let distance <- enemy distance_to {x_on_ray, y_on_ray};
+							// If the enemy is close enough to be drawn
+							if distance <= enemy.shape.width/2{
+		    					hor_enemy <- true;
+		    					if distance < closest_enemy_dist {
+		    						closest_enemy_x <- x_on_ray;
+		    						closest_enemy_y <- y_on_ray;
+		    					}
+							}
+    					}
+    					if hor_enemy{
+							x_hor <- closest_enemy_x;
+							y_hor <- closest_enemy_y;
+    						break;
+    					} 
+	    				
 	    				if game_map[x,y].type = "wall"{
 			                break;
 		            	}
@@ -309,8 +368,10 @@ species player {
 			point vert	<- {x_vert, y_vert};
 			point best;
 			float offset;
+			bool enemy <- false;
 			if location distance_to hor < location distance_to vert {
 				best <- hor;
+				enemy <- hor_enemy;
 				offset <- better_mod(x_hor, cell_width);
 				if sin_a > 0 {
 					offset <- cell_width - offset;
@@ -319,6 +380,7 @@ species player {
 			}
 			else {
 				best <- vert;
+				enemy <- ver_enemy;
 				offset <- better_mod(y_vert, cell_height);
 				if cos_a <= 0 {
 					offset <- cell_height - offset;
@@ -329,9 +391,14 @@ species player {
 			let corrected_depth <- location distance_to best;
 			// to counter fishbowl effect
 			corrected_depth <- corrected_depth * cos(heading - ray_angle);
-			if ! (walls.keys contains ray) or (walls[ray][0] > corrected_depth) {
-	    		walls[ray] <- [corrected_depth,offset];
-				
+			// we register it differently if it's a wall or an enemy
+			if not enemy {
+				if ! (walls.keys contains ray) or (walls[ray][0] > corrected_depth) {
+		    		walls[ray] <- [corrected_depth, offset];
+				}
+			}
+			else {
+				enemies[ray] <- [corrected_depth, offset];
 			}
 			
 			ray_angle <- ray_angle + step_angle;
@@ -435,6 +502,27 @@ species player {
 
 
 		}
+		
+		list enemies_cp <- enemies.keys collect list(each, enemies[each][0], enemies[each][1]);
+		loop enemy over: enemies_cp{
+			
+			float x_start		<- float(enemy[0]);
+			float depth 		<- float(enemy[1]);
+			float half_height 	<- min(corrected_wall_half_height/(depth+epsilon), world.shape.height/2);
+			float full_height 	<- half_height*2;
+			int offset 			<- int(float(enemy[2]) * (enemy_txt.width - enemy_pxl_width));
+			
+			image enemy_part <- enemy_txt
+								 clipped_with (offset, 0, enemy_pxl_width, enemy_pxl_height)
+								//world.getSlicedImage(offset, full_height/wall_width) 
+//								with_size (pxl_width, pxl_height * full_height/wall_width)
+								;
+			
+			draw enemy_part at:{x_start* wall_width + wall_width/2, world.shape.height/2-half_height/2, exp(-depth)} 
+							size:{wall_width, full_height}
+							;
+		}
+		
 	}
 }
 
@@ -467,22 +555,22 @@ experiment play autorun:true{
 //	}
 	
 	output synchronized:true{
-//		layout horizontal([0::50, 1::50]) navigator:false editors:false parameters:false consoles:true tray:true;
-//		display logic type:2d toolbar:false {
-//			grid game_map border:#black;
-//			species player;
-//			species baddy;
-//			event #arrow_up 	action:up;
-//			event #arrow_down 	action:down;
-//			event #arrow_left 	action:left;
-//			event #arrow_right 	action:right;
-//			//event mouse_move 	action:mouse_move;{ask simulation {do mouse_move;}}
-////			event #mouse_down	action:mouse_down;
-////			event #mouse_enter	action:mouse_enter;
-////			event #mouse_exit	action:mouse_exit;
-//		}
+	layout horizontal([0::50, 1::50]) navigator:false editors:false parameters:false consoles:true tray:true;
+		display logic type:2d toolbar:false antialias:false{
+			grid game_map border:#black;
+			species player;
+			species baddy;
+			event #arrow_up 	action:up;
+			event #arrow_down 	action:down;
+			event #arrow_left 	action:left;
+			event #arrow_right 	action:right;
+			//event mouse_move 	action:mouse_move;{ask simulation {do mouse_move;}}
+//			event #mouse_down	action:mouse_down;
+//			event #mouse_enter	action:mouse_enter;
+//			event #mouse_exit	action:mouse_exit;
+		}
 		
-		layout navigator:false editors:false parameters:false consoles:false tray:true;
+//		layout navigator:false editors:false parameters:false consoles:false tray:true;
 		display rendering type:3d axes:false  toolbar:true antialias:false{
 			camera 'default' location: {50.0,50.0022,127.6281} target: {50.0,50.0,0.0} locked:true;			
 			camera 'my_camera' location: #from_above locked: true;
