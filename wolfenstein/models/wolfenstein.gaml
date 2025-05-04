@@ -474,7 +474,7 @@ species player {
 		float corrected_wall_half_height <- wall_half_height/tan(half_FOV);
 		
 		//we copy the list in order to avoid concurrent modifications
-		list walls_cp <- walls.keys collect list(each, walls[each][0], walls[each][1]);
+		list<list> walls_cp <- walls.keys collect list(each, walls[each][0], walls[each][1]);
 		loop wall over:walls_cp {
 			
 			float x_start		<- float(wall[0]);
@@ -503,8 +503,8 @@ species player {
 
 		}
 		
-		list enemies_cp <- enemies.keys collect list(each, enemies[each][0], enemies[each][1]);
-		loop enemy over: enemies_cp{
+		list<list> enemies_cp <- enemies.keys collect list(each, enemies[each][0], enemies[each][1]);
+		loop enemy over: enemies_cp {
 			
 			float x_start		<- float(enemy[0]);
 			float depth 		<- float(enemy[1]);
