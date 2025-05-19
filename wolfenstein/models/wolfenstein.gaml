@@ -183,7 +183,7 @@ species player {
 	map<int, list<float>> enemies;
 	
 	list<list> walls_to_draw <- list_with(nb_rays, [nil, 0, 0, 0]);
-	list<list> enemies_to_draw <- list_with(nb_rays, [nil, 0, 0, 0]);
+	list<list> enemies_to_draw;
 	
 	init {
 		loop while:(game_map overlapping (shape at_location location)) one_matches (each.type = "wall"){
