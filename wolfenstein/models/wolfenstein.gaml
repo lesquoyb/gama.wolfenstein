@@ -105,13 +105,13 @@ global {
 	
 	
 	action game_loop(float delta){
-		
 		// process movement
 		ask player {
 			heading <- heading - asked_heading_delta * delta;
 			asked_heading_delta <- 0.0;
 			do process_movement(delta);
 			do update_rays;
+			do update_image_lists;
 		}
 		
 	}
@@ -181,6 +181,9 @@ species player {
 	list<geometry> rays <- list_with(nb_rays, nil); // for debug only
 	map<int, list<float>> walls;
 	map<int, list<float>> enemies;
+	
+	list<list> walls_to_draw <- list_with(nb_rays, [nil, 0, 0, 0]);
+	list<list> enemies_to_draw <- list_with(nb_rays, [nil, 0, 0, 0]);
 	
 	init {
 		loop while:(game_map overlapping (shape at_location location)) one_matches (each.type = "wall"){
@@ -406,6 +409,43 @@ species player {
 	
 	}
 	
+	action update_image_lists {
+		
+		float corrected_wall_half_height <- wall_half_height/tan(half_FOV);
+		
+		int i <- 0;
+		list<list> walls_cp <- walls.keys collect list(each, walls[each][0], walls[each][1]);
+		loop wall over:walls_cp {
+			
+			float x_start		<- float(wall[0]);
+			float depth 		<- float(wall[1]);
+			float half_height 	<- min(corrected_wall_half_height/(depth+epsilon), world.shape.height/2);
+			float full_height 	<- half_height*2;
+			int offset 			<- int(float(wall[2]) * (wall_txt.width - pxl_width));
+
+			// cut the right section of the texture
+			image wall_part <- wall_txt clipped_with (offset, 0, pxl_width, pxl_height);
+			// store all the infos in the list
+			walls_to_draw[i] <- [wall_part, x_start, half_height, depth];
+			i <- i + 1;
+		}
+		
+		enemies_to_draw <- [];
+		list<list> enemies_cp <- enemies.keys collect list(each, enemies[each][0], enemies[each][1]);
+		loop enemy over: enemies_cp {
+			
+			float x_start		<- float(enemy[0]);
+			float depth 		<- float(enemy[1]);
+			float half_height 	<- min(corrected_wall_half_height/(depth+epsilon), world.shape.height/2);
+			float full_height 	<- half_height*2;
+			int offset 			<- int(float(enemy[2]) * (enemy_txt.width - enemy_pxl_width));
+			
+			image enemy_part <- enemy_txt
+								 clipped_with (offset, 0, enemy_pxl_width, enemy_pxl_height)
+								;
+			enemies_to_draw <+ [enemy_part, x_start, half_height, depth];
+		}
+	}
 	
 	
 	action process_movement(float delta) {
@@ -451,10 +491,6 @@ species player {
 		loop ray over:rays {
 			draw ray color:#green;		
 		}
-//		loop p over:points {
-//			draw p color:#brown;
-//		}
-		
 		draw line(location, {location.x + 3 * cos(heading), location.y + 3 * sin(heading)}) color:#yellow width:3;
 	}
 	
@@ -468,61 +504,34 @@ species player {
 	
 
 	
-	
 	aspect eye_of_the_beholder {
-		// TODO: darken floor and ceiling too (needs to draw by slices too)
-		float corrected_wall_half_height <- wall_half_height/tan(half_FOV);
 		
-		//we copy the list in order to avoid concurrent modifications
-		list<list> walls_cp <- walls.keys collect list(each, walls[each][0], walls[each][1]);
-		loop wall over:walls_cp {
+		loop wall over:copy(walls_to_draw) {
 			
-			float x_start		<- float(wall[0]);
-			float depth 		<- float(wall[1]);
-			float half_height 	<- min(corrected_wall_half_height/(depth+epsilon), world.shape.height/2);
+			image wall_part		<- image(wall[0]);
+			float x_start		<- float(wall[1]);
+			float half_height 	<- float(wall[2]);
+			float depth 		<- float(wall[3]);
 			float full_height 	<- half_height*2;
-			int offset 			<- int(float(wall[2]) * (wall_txt.width - pxl_width));
-
-			// cut the right section of the texture
-			image wall_part <- wall_txt 
-								 clipped_with (offset, 0, pxl_width, pxl_height)
-								//world.getSlicedImage(offset, full_height/wall_width) 
-//								with_size (pxl_width, pxl_height * full_height/wall_width)
-								;
 			
 			// we draw the wall
 			draw wall_part at:{x_start* wall_width + wall_width/2, world.shape.height/2-half_height/2, exp(-depth)} 
 							size:{wall_width, full_height}
 							;
-
-//			draw rectangle(
-//				{x_start,max(world.shape.height/2-half_height, 0)},
-//				{x_start+wall_width,min(world.shape.height/2+half_height,world.shape.height)}
-//			) color:darkens(#brown, depth);
-
-
 		}
 		
-		list<list> enemies_cp <- enemies.keys collect list(each, enemies[each][0], enemies[each][1]);
-		loop enemy over: enemies_cp {
+		loop enemy over: copy(enemies_to_draw) {
 			
-			float x_start		<- float(enemy[0]);
-			float depth 		<- float(enemy[1]);
-			float half_height 	<- min(corrected_wall_half_height/(depth+epsilon), world.shape.height/2);
+			image enemy_part	<- image(enemy[0]);
+			float x_start		<- float(enemy[1]);
+			float half_height 	<- float(enemy[2]);
+			float depth 		<- float(enemy[3]);
 			float full_height 	<- half_height*2;
-			int offset 			<- int(float(enemy[2]) * (enemy_txt.width - enemy_pxl_width));
-			
-			image enemy_part <- enemy_txt
-								 clipped_with (offset, 0, enemy_pxl_width, enemy_pxl_height)
-								//world.getSlicedImage(offset, full_height/wall_width) 
-//								with_size (pxl_width, pxl_height * full_height/wall_width)
-								;
 			
 			draw enemy_part at:{x_start* wall_width + wall_width/2, world.shape.height/2-half_height/2, exp(-depth)} 
 							size:{wall_width, full_height}
 							;
 		}
-		
 	}
 }
 
@@ -555,25 +564,25 @@ experiment play autorun:true{
 //	}
 	
 	output synchronized:true{
-	layout horizontal([0::50, 1::50]) navigator:false editors:false parameters:false consoles:true tray:true;
-		display logic type:2d toolbar:false antialias:false{
-			grid game_map border:#black;
-			species player;
-			species baddy;
-			event #arrow_up 	action:up;
-			event #arrow_down 	action:down;
-			event #arrow_left 	action:left;
-			event #arrow_right 	action:right;
-			//event mouse_move 	action:mouse_move;{ask simulation {do mouse_move;}}
-//			event #mouse_down	action:mouse_down;
-//			event #mouse_enter	action:mouse_enter;
-//			event #mouse_exit	action:mouse_exit;
-		}
+//	layout horizontal([0::50, 1::50]) navigator:false editors:false parameters:false consoles:true tray:true;
+//		display logic type:3d toolbar:false antialias:false{
+//			grid game_map border:#black;
+//			species player;
+//			species baddy;
+//			event #arrow_up 	action:up;
+//			event #arrow_down 	action:down;
+//			event #arrow_left 	action:left;
+//			event #arrow_right 	action:right;
+//			//event mouse_move 	action:mouse_move;{ask simulation {do mouse_move;}}
+////			event #mouse_down	action:mouse_down;
+////			event #mouse_enter	action:mouse_enter;
+////			event #mouse_exit	action:mouse_exit;
+//		}
 		
 //		layout navigator:false editors:false parameters:false consoles:false tray:true;
 		display rendering type:3d axes:false  toolbar:true antialias:false{
-			camera 'default' location: {50.0,50.0022,127.6281} target: {50.0,50.0,0.0} locked:true;			
-			camera 'my_camera' location: #from_above locked: true;
+//			camera 'default' location: {50.0,50.0022,127.6281} target: {50.0,50.0,0.0} locked:true;			
+//			camera 'my_camera' location: #from_above locked: true;
 			graphics background {
 				// draw floor
 				//draw rectangle(world.shape.width, world.shape.height/2) at:{0, world.shape.height/2}+{world.shape.width/2,world.shape.height/4} color:#green;
