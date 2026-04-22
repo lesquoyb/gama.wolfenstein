@@ -116,22 +116,22 @@ global {
 		
 	}
 	
-	action arrow_up {
+	action arrow_up() {
 		direction_asked <- "Front";
 	}
-	action arrow_down {
+	action arrow_down() {
 		direction_asked <- "Back";
 	}
-	action arrow_left {
+	action arrow_left() {
 		direction_asked <- "Left";
 	}
-	action arrow_right {
+	action arrow_right() {
 		direction_asked <- "Right";
 	}
-	action rotate_right{
+	action rotate_right() {
 		asked_heading_delta <- -angular_speed;
 	}
-	action rotate_left{
+	action rotate_left() {
 		asked_heading_delta <- angular_speed;
 	}
 }
@@ -197,7 +197,7 @@ species player {
 	
 	
 	// fills the rays list with all the rays of the fov of the player
-	action update_rays {
+	action update_rays() {
 	
 		let ox <- location.x;
 		let oy <- location.y;
@@ -409,7 +409,7 @@ species player {
 	
 	}
 	
-	action update_image_lists {
+	action update_image_lists() {
 		
 		float corrected_wall_half_height <- wall_half_height/tan(half_FOV);
 		
@@ -539,23 +539,23 @@ experiment play autorun:true{
 	
 	// We try to get 60 fps
 	float minimum_cycle_duration <- 1.0/60.0;
-	action up{
+	action up() {
 		write "up";
 		ask simulation {do arrow_up;}
 	}
-	action down{
+	action down() {
 		ask simulation {do arrow_down;}
 	}
-	action left{
+	action left() {
 		ask simulation {do arrow_left;}
 	}
-	action right{
+	action right() {
 		ask simulation {do arrow_right;}
 	}
-	action rotate_right {
+	action rotate_right() {
 		ask simulation {do rotate_right;}
 	}
-	action rotate_left {
+	action rotate_left() {
 		ask simulation {do rotate_left;}
 	}
 
@@ -565,7 +565,7 @@ experiment play autorun:true{
 	
 	output synchronized:true{
 //	layout horizontal([0::50, 1::50]) navigator:false editors:false parameters:false consoles:true tray:true;
-//		display logic type:3d toolbar:false antialias:false{
+//		display logic type:2d toolbar:false antialias:false{
 //			grid game_map border:#black;
 //			species player;
 //			species baddy;
@@ -579,7 +579,7 @@ experiment play autorun:true{
 ////			event #mouse_exit	action:mouse_exit;
 //		}
 		
-//		layout navigator:false editors:false parameters:false consoles:false tray:true;
+		layout navigator:false editors:false parameters:false consoles:false tray:true;
 		display rendering type:3d axes:false  toolbar:true antialias:false{
 //			camera 'default' location: {50.0,50.0022,127.6281} target: {50.0,50.0,0.0} locked:true;			
 //			camera 'my_camera' location: #from_above locked: true;
